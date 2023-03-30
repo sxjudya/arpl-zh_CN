@@ -1,99 +1,98 @@
+# arpl-zh_CN
+
 # Automated Redpill Loader
 
-[中文说明](./README-Zh.md)
+本库为 arpl 同步汉化:  
+原版：https://github.com/fbelavenuto/arpl  
+汉化：https://github.com/wjz304/arpl-zh_CN  
 
-This particular project was created to facilitate my testing with Redpill and I decided to share it with other users.
 
-I'm Brazilian and my English is not good, so I apologize for my translations.
+## 说明:  
+### 本库会发布两种版本  
+* release: 
+  * 仅汉化和CN处理.
+  * 同步上游仓库.  
+* pre-release: 
+  * 包含我的增强修改.
+  * 不定期发布.
 
-I tried to make the system as user-friendly as possible, to make life easier. The loader automatically detects which device is being used, SATADoM or USB, detecting its VID and PID correctly. redpill-lkm has been edited to allow booting the kernel without setting the variables related to network interfaces so the loader (and user) doesn't have to worry about that. The Jun's code that makes the zImage and Ramdisk patch is embedded, if there is a change in "zImage" or "rd.gz" by some smallupdate, the loader re-applies the patches. The most important kernel modules are built into the DSM ramdisk image for automatic peripheral detection.
+## 使用
+* ### [命令输入方法演示](https://www.bilibili.com/video/BV1T84y1P7Kq)  
+* 切换 arpl 任以版本: 
+    ```shell
+    # 下载需要的版本
+    curl -kL https://github.com/fbelavenuto/arpl/releases/download/v1.1-beta2a/arpl-1.1-beta2a.img.zip -o arpl.zip
+    # 解压
+    unzip arpl.zip
+    # 挂载 img
+    losetup /dev/loop0 arpl.img
+    # 复制 p1 p3 分区
+    mkdir -p /mnt/loop0p1; mount /dev/loop0p1 /mnt/loop0p1; cp -r /mnt/loop0p1/* /mnt/p1/; umount /mnt/loop0p1
+    mkdir -p /mnt/loop0p3; mount /dev/loop0p3 /mnt/loop0p2; cp -r /mnt/loop0p3/* /mnt/p3/; umount /mnt/loop0p3
+    # 卸载 img
+    losetup -d /dev/loop0
+    # 如果安装的版本中无你当前安装的DSM请删除 /mnt/p1/user-config.yml 和 /mnt/p3/*-dsm
+    rm /mnt/p1/user-config.yml /mnt/p3/*-dsm
+    # 重启
+    reboot
+    ```
+* arpl 备份:
+    ```shell
+    # 备份为 disk.img.gz, 自行导出.
+    dd if=`blkid | grep 'LABEL="ARPL3"' | cut -d3 -f1` | gzip > disk.img.gz
+    # 结合 transfer.sh 直接导出链接
+    curl -skL --insecure -w '\n' --upload-file disk.img.gz https://transfer.sh
+    ```
+* arpl 持久化 /opt/arpl 目录的修改:
+    ```shell
+    RDXZ_PATH=/tmp/rdxz_tmp
+    mkdir -p "${RDXZ_PATH}"
+    (cd "${RDXZ_PATH}"; xz -dc < "/mnt/p3/initrd-arpl" | cpio -idm) >/dev/null 2>&1 || true
+    rm -rf "${RDXZ_PATH}/opt/arpl"
+    cp -rf "/opt/arpl" "${RDXZ_PATH}/opt"
+    (cd "${RDXZ_PATH}"; find . 2>/dev/null | cpio -o -H newc -R root:root | xz --check=crc32 > "/mnt/p3/initrd-arpl") || true
+    rm -rf "${RDXZ_PATH}"
+    ```
+* arpl 修改所有的pat下载源:
+    ```shell
+    sed -i 's/global.download.synology.com/cndl.synology.cn/g' /opt/arpl/menu.sh
+    sed -i 's/global.download.synology.com/cndl.synology.cn/g' `find /opt/arpl/model-configs/ -type f -name '*.yml'`
+    ```
+* arpl 更新慢的解决办法:
+    ```shell
+    sed -i 's|https://.*/https://|https://|g' /opt/arpl/menu.sh 
+    sed -i 's|https://github.com|https://ghproxy.homeboyc.cn/&|g' /opt/arpl/menu.sh 
+    sed -i 's|https://api.github.com|http://ghproxy.homeboyc.cn/&|g' /opt/arpl/menu.sh
+    ```
+* arpl 去掉pat的hash校验:
+    ```shell
+    sed -i 's/HASH}" ]/& \&\& false/g' /opt/arpl/menu.sh
+    ```
+* arpl 下获取网卡驱动:
+    ```shell
+    for i in `ls /sys/class/net | grep -v 'lo'`; do echo $i -- `ethtool -i $i | grep driver`; done
+    ```
+* arpl 使用自定义的dts文件 (> v1.1-beta2a 版本):
+    ```shell
+    # 将dts文件放到/mnt/p1下,并重命名为model.dts. "/mnt/p1/model.dts"
+    sed -i '/^.*\/addons\/disks.sh.*$/a [ -f "\/mnt\/p1\/model.dts" ] \&\& cp "\/mnt\/p1\/model.dts" "${RAMDISK_PATH}\/addons\/model.dts"' /opt/arpl/ramdisk-patch.sh
+    ```
+* arpl 离线安装 (> ++-v1.3):
+    ```shell
+    1. arpl 下
+    # arpl下获取型号版本的pat下载地址( 替换以下命令中的 版本号和型号部分)
+    yq eval '.builds.42218.pat.url' "/opt/arpl/model-configs/DS3622xs+.yml"
+    # 将pat重命名为<型号>-<版本>.pat, 放入 /mnt/p3/dl/ 下
+    # 例: /mnt/p3/dl/DS3622xs+-42218.pat
 
-# Important considerations
+    2. pc 下
+    # 通过 DG等其他软件打开arpl.img, 将pat重命名为<型号>-<版本>.pat, 放入 第3个分区的 /dl/ 下.
 
- - Some users have experienced an excessively long time to boot. In this case is highly recommended to use an SSD for the loader in the case of the option via DoM or a fast USB flash drive;
+    ```
 
- - You must have at least 4GB of RAM, both in baremetal and VMs;
 
- - The DSM kernel is compatible with SATA ports, not SAS/SCSI/etc. For device-tree models only SATA ports work. For the other models, another type of disks may work;
+## 打赏一下
+<img src="https://raw.githubusercontent.com/wjz304/wjz304/master/my/20220908134226.jpg" width="400">
 
- - It is possible to use HBA cards, however SMART and serial numbers are only functional on DS3615xs, DS3617xs and DS3622xs+ models.
 
-# Use
 
-## General
-
-To use this project, download the latest image available and burn it to a USB stick or SATA disk-on-module. Set the PC to boot from the burned media and follow the informations on the screen.
-
-The loader will automatically increase the size of the last partition and use this space as cache if it is larger than 2GiB.
-
-## Acessing loader
-
-### Via terminal
-
-Call the "menu.sh" command from the computer itself.
-
-### Via web
-
-From another machine into same network, type the address provided on the screen `http://<ip>:7681` in browser.
-
-### Via ssh
-
-From another machine into same network, use a ssh client, username `root` and password `Redp1lL-1s-4weSomE`
-
-## Using loader
-
-The menu system is dynamic and I hope it is intuitive enough that the user can use it without any problems.
-
-There is no need to configure the VID/PID (if using a USB stick) or define the MAC Addresses of the network interfaces. If the user wants to modify the MAC Address of any interface, uses the "Change MAC" into "cmdline" menu.
-
-If a model is chosen that uses the Device-tree system to define the HDs, there is no need to configure anything. In the case of models that do not use device-tree, the configurations must be done manually and for this there is an option in the "cmdline" menu to display the SATA controllers, DUMMY ports and ports in use, to assist in the creation of the "SataPortMap", "DiskIdxMap" and "sata_remap" if necessary.
-
-Another important point is that the loader detects whether or not the CPU has the MOVBE instruction and does not display the models that require it. So if the DS918+ and DVA3221 models are not displayed it is because of the CPU's lack of support for MOVBE instructions. You can disable this restriction and test at your own risk.
-
-I developed a simple patch to no longer display the DUMMY port error on models without device-tree, the user will be able to install without having to worry about it.
-
-## Quickstart guide
-
-After booting the loader, the following screen should appear. Type menu.sh and press `<ENTER>`:
-
-![](doc/first-screen.png)
-
-If you prefer, you can access it via the web:
-
-![](doc/ttyd.png)
-
-Select the "model" option and choose the model you prefer:
-
-![](doc/model.png)
-
-Select the "Buildnumber" option and choose the first option:
-
-![](doc/buildnumber.png)
-
-Go to "Serial" menu and choose "Generate a random serial number".
-
-Select the "Build" option and wait for the loader to be generated:
-
-![](doc/making.png)
-
-Select the "Boot" option and wait for the DSM to boot:
-
-![](doc/DSM%20boot.png)
-
-The DSM kernel does not display messages on the screen, so it is necessary to continue the process of configuring DSM through the browser by accessing the address `http://<ip>`.
-There are several tutorials on how to configure DSM over the internet, which will not be covered here.
-
-# Tutorials
-
-An ARPL user (Rikkie) created a tutorial to install ARPL on a proxmox server:
-https://hotstuff.asia/2023/01/03/xpenology-with-arpl-on-proxmox-the-easy-way/
-
-# Troubles/questions/etc
-
-Please search the forums at https://xpenology.com/forum if your question/problem has been discussed and resolved. If you can't find a solution, use github issues.
-
-# Thanks
-
-All code was based on the work of TTG, pocopico, jumkey and others involved in continuing TTG's original redpill-load project.
-
-More information will be added in the future.
